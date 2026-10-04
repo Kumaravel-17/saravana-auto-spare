@@ -487,25 +487,6 @@ export default function Dashboard() {
             <p className={`mt-1 text-xs font-semibold ${tk.muted}`}>Workshop & Service Management Portal</p>
           </div>
 
-          {/* Quick Demo Credentials Banner */}
-          <div className={`rounded-2xl border p-3 text-xs ${innerSurface}`}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
-                <ShieldCheck className="h-3.5 w-3.5" /> Demo Login Access
-              </span>
-              <button
-                type="button"
-                onClick={fillDemoCredentials}
-                className="rounded-lg bg-indigo-600/10 px-2 py-0.5 text-[10px] font-extrabold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-600 hover:text-white transition"
-              >
-                Auto-fill Credentials
-              </button>
-            </div>
-            <div className={`space-y-0.5 text-[11px] font-mono ${tk.sub}`}>
-              <p>Email: <span className="font-bold text-indigo-600 dark:text-indigo-400">velk@2058.com</span></p>
-              <p>Password: <span className="font-bold text-indigo-600 dark:text-indigo-400">kumaravel_05</span></p>
-            </div>
-          </div>
 
           {/* Error Alert */}
           {loginError && (
