@@ -9,19 +9,12 @@ import {
   FileText,
   Search,
   ChevronDown,
-  Play,
-  Pause,
-  Sliders,
   X,
-  Bell,
   ArrowUpRight,
   ArrowDownRight,
-  Menu,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
-  Boxes,
-  Users,
   Receipt,
   BarChart3,
   Settings,
@@ -35,25 +28,19 @@ import {
   Eye,
   EyeOff,
   LogOut,
-  ShieldCheck,
   AlertCircle,
-  Check,
 } from "lucide-react";
+import JobCardForm from "./components/JobCardForm";
+import JobCardDetails from "./components/JobCardDetails";
+import ServiceOrders from "./components/ServiceOrders";
+import Bills from "./components/Bills";
+import Reports from "./components/Reports";
+import { StatusPill, STATUS_STYLE, type UI } from "./components/ui";
+import { INITIAL_ORDERS, PARTS_CATALOG, blankOrder, type CatalogPart, type Order } from "./lib/workshop";
 
 /* -------------------------------------------------------------------------- */
 /*  DATA                                                                      */
 /* -------------------------------------------------------------------------- */
-
-type Order = {
-  id: string;
-  vehicleNo: string;
-  type: string;
-  customer: string;
-  repairType: string;
-  mechanic: string;
-  status: string;
-  deliveryDate: string;
-};
 
 const STATS = [
   { id: "vehicles", title: "Vehicles Received", sub: "Today", value: "18", change: "+20%", period: "vs yesterday", up: true, good: true, icon: Truck, accent: "#3B82F6", spark: [8, 11, 9, 14, 12, 15, 18] },
@@ -94,14 +81,6 @@ const SERVICE_STATUS = [
   { name: "Ready for Delivery", count: 4, color: "#8B5CF6", icon: Truck },
 ];
 
-const INITIAL_ORDERS: Order[] = [
-  { id: "JC-1024", vehicleNo: "TN 58 AB 1234", type: "Lorry", customer: "SR Transport", repairType: "Engine Overhaul", mechanic: "Ravi", status: "In Progress", deliveryDate: "Oct 1, 2026" },
-  { id: "JC-1025", vehicleNo: "TN 72 CD 5678", type: "Bus", customer: "KPR Travels", repairType: "Brake Service", mechanic: "Kumar", status: "Inspection", deliveryDate: "Oct 2, 2026" },
-  { id: "JC-1026", vehicleNo: "TN 61 EF 9012", type: "Lorry", customer: "VPM Logistics", repairType: "Oil Change", mechanic: "Arun", status: "Completed", deliveryDate: "Oct 1, 2026" },
-  { id: "JC-1027", vehicleNo: "TN 45 GH 3456", type: "Bus", customer: "Shree Tours", repairType: "AC Repair", mechanic: "Mani", status: "In Progress", deliveryDate: "Oct 3, 2026" },
-  { id: "JC-1028", vehicleNo: "TN 37 IJ 7890", type: "Lorry", customer: "SSK Transport", repairType: "Clutch Overhaul", mechanic: "Selvam", status: "Inspection", deliveryDate: "Oct 3, 2026" },
-];
-
 const ACTIVITIES = [
   { time: "09:00 AM", title: "Vehicle received", vehicle: "TN 58 AB 1234 · Lorry", color: "#3B82F6" },
   { time: "10:15 AM", title: "Inspection completed", vehicle: "TN 72 CD 5678 · Bus", color: "#10B981" },
@@ -118,21 +97,13 @@ const DELIVERIES = [
   { vehicleNo: "TN 45 GH 3456", type: "Bus", customer: "Shree Tours", date: "Oct 3, 2026", status: "In Progress" },
 ];
 
-const NAV = [
+const NAV: { id: string; label: string; short?: string; icon: React.ElementType; badge?: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "orders", label: "Services & Orders", icon: FileText, badge: "24" },
-  { id: "vehicles", label: "Vehicles", icon: Truck, badge: "18" },
+  { id: "orders", label: "Services & Orders", short: "Services", icon: FileText },
+  { id: "bills", label: "Bills", icon: Receipt },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
 ];
-
-const STATUS_STYLE: Record<string, { dot: string; light: string; dark: string }> = {
-  Inspection: { dot: "#3B82F6", light: "bg-blue-50 text-blue-700 ring-blue-600/20", dark: "bg-blue-500/10 text-blue-300 ring-blue-400/25" },
-  "In Progress": { dot: "#F59E0B", light: "bg-amber-50 text-amber-700 ring-amber-600/20", dark: "bg-amber-500/10 text-amber-300 ring-amber-400/25" },
-  Completed: { dot: "#10B981", light: "bg-emerald-50 text-emerald-700 ring-emerald-600/20", dark: "bg-emerald-500/10 text-emerald-300 ring-emerald-400/25" },
-  "Ready for Delivery": { dot: "#8B5CF6", light: "bg-violet-50 text-violet-700 ring-violet-600/20", dark: "bg-violet-500/10 text-violet-300 ring-violet-400/25" },
-  Ready: { dot: "#8B5CF6", light: "bg-violet-50 text-violet-700 ring-violet-600/20", dark: "bg-violet-500/10 text-violet-300 ring-violet-400/25" },
-};
 
 /* -------------------------------------------------------------------------- */
 /*  HELPERS                                                                   */
@@ -197,16 +168,33 @@ export default function Dashboard() {
   const [mobileNav, setMobileNav] = useState(false);
   const [activeNav, setActiveNav] = useState("dashboard");
 
+  // Sync activeNav with URL search params so each tab acts as a page route
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab) setActiveNav(tab);
+    }
+    
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab") || "dashboard";
+      setActiveNav(tab);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   // Data
   const [query, setQuery] = useState("");
   const [timeframe, setTimeframe] = useState("Last 7 Days");
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const [catalog, setCatalog] = useState<CatalogPart[]>(PARTS_CATALOG);
   const [hovered, setHovered] = useState<number | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [selected, setSelected] = useState<Order | null>(null);
-  const [form, setForm] = useState({
-    vehicleNo: "", type: "Lorry", customer: "", repairType: "", mechanic: "Ravi", status: "Inspection", deliveryDate: "Oct 7, 2026",
-  });
+  const [jobForm, setJobForm] = useState<{ mode: "create" | "edit"; order: Order } | null>(null);
+  const [openJobId, setOpenJobId] = useState<string | null>(null);
+  const [billId, setBillId] = useState<string | null>(null);
+  const openJob = orders.find((o) => o.id === openJobId) ?? null;
 
   /* ---- design tokens ---- */
   const tk = {
@@ -270,8 +258,7 @@ export default function Dashboard() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setShowModal(false);
-        setSelected(null);
+        setJobForm(null);
         setMobileNav(false);
         setShowControls(false);
       }
@@ -280,19 +267,49 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    const n = Math.max(...orders.map((o) => parseInt(o.id.split("-")[1], 10))) + 1;
-    setOrders([{ id: `JC-${n}`, ...form }, ...orders]);
-    setShowModal(false);
-    setForm({ vehicleNo: "", type: "Lorry", customer: "", repairType: "", mechanic: "Ravi", status: "Inspection", deliveryDate: "Oct 7, 2026" });
+  const navigate = (id: string) => {
+    setActiveNav(id);
+    setOpenJobId(null);
+    window.history.pushState(null, "", `?tab=${id}`);
+    window.scrollTo({ top: 0 });
+  };
+
+  const showJob = (id: string) => {
+    setActiveNav("orders");
+    setOpenJobId(id);
+    window.history.pushState(null, "", `?tab=orders`);
+    window.scrollTo({ top: 0 });
+  };
+
+  const updateOrder = (order: Order) => setOrders((os) => os.map((o) => (o.id === order.id ? order : o)));
+
+  const startNewJob = () => {
+    const n = Math.max(1023, ...orders.map((o) => parseInt(o.id.split("-")[1], 10))) + 1;
+    setJobForm({ mode: "create", order: blankOrder(`JC-${n}`) });
+  };
+
+  const saveJob = (order: Order) => {
+    if (jobForm?.mode === "create") {
+      setOrders((os) => [order, ...os]);
+      showJob(order.id);
+    } else {
+      updateOrder(order);
+    }
+    setJobForm(null);
+  };
+
+  const printBill = (id: string) => {
+    setActiveNav("bills");
+    setOpenJobId(null);
+    setBillId(id);
+    setTimeout(() => window.print(), 300);
   };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return orders;
     return orders.filter((o) =>
-      [o.id, o.vehicleNo, o.customer, o.repairType, o.mechanic, o.status].some((f) => f.toLowerCase().includes(q))
+      [o.id, o.vehicleNo, o.vehicleModel, o.customer, o.phone, o.mechanic, o.status].some((f) => f.toLowerCase().includes(q))
     );
   }, [orders, query]);
 
@@ -372,6 +389,8 @@ export default function Dashboard() {
     return dark ? s.dark : s.light;
   };
 
+  const ui: UI = { dark, tk, glass, innerSurface, statusBadge };
+
   const today = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(2026, 9, 4));
 
   /* ---- Sidebar Render ---- */
@@ -383,7 +402,7 @@ export default function Dashboard() {
         return (
           <button
             key={item.id}
-            onClick={() => { setActiveNav(item.id); onPick?.(); }}
+            onClick={() => { navigate(item.id); onPick?.(); }}
             aria-current={active ? "page" : undefined}
             title={!expanded ? item.label : undefined}
             className={`group relative flex w-full items-center gap-3.5 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${active
@@ -440,8 +459,6 @@ export default function Dashboard() {
       )}
     </div>
   );
-
-  const modalField = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25";
 
   /* ======================================================================== */
   /*  SIGN IN PAGE VIEW                                                       */
@@ -589,7 +606,7 @@ export default function Dashboard() {
 
       {/* ------------------------------- SIDEBAR -------------------------------- */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 hidden flex-col justify-between border-r p-3 transition-[width] duration-300 ease-out md:flex ${sidebarOpen ? "w-64" : "w-[76px]"}`}
+        className={`fixed inset-y-0 left-0 z-50 hidden flex-col justify-between border-r p-3 transition-[width] duration-300 ease-out md:flex ${sidebarOpen ? "w-64" : "w-[76px]"}`}
         style={glass}
       >
         <div>
@@ -614,7 +631,7 @@ export default function Dashboard() {
       {/* -------------------------------- MAIN --------------------------------- */}
       <div className={`relative z-10 mx-auto min-h-screen w-full max-w-[1680px] flex-1 space-y-6 p-4 pb-24 transition-[margin] duration-300 sm:p-6 lg:p-8 ${sidebarOpen ? "md:ml-64" : "md:ml-[76px]"}`}>
         {/* STICKY HEADER ONLY AT DESKTOP ("Workshop Overview") */}
-        <header className="relative lg:sticky lg:top-4 z-30 flex flex-col gap-4 rounded-2xl border p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between backdrop-blur-xl transition-all shadow-xl" style={glass}>
+        <header className="relative lg:sticky lg:top-4 z-40 flex flex-col gap-4 rounded-2xl border p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between backdrop-blur-xl transition-all shadow-xl" style={glass}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               {/* Mobile brand header badge */}
@@ -633,9 +650,9 @@ export default function Dashboard() {
                   {activeNav === "settings"
                     ? "Settings & Account"
                     : activeNav === "orders"
-                    ? "Services & Orders"
-                    : activeNav === "vehicles"
-                    ? "Vehicles Directory"
+                    ? openJob ? "Job Card Details" : "Services & Orders"
+                    : activeNav === "bills"
+                    ? "Bills & Invoices"
                     : activeNav === "reports"
                     ? "Reports & Analytics"
                     : "Workshop Overview"}
@@ -658,7 +675,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 lg:flex-nowrap">
+          <div className="flex  flex-col sm:flex-row flex-wrap sm:items-center gap-2 sm:gap-2.5 lg:flex-nowrap">
             <div className="relative min-w-[140px] flex-1 lg:w-72 lg:flex-none">
               <Search className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${tk.muted}`} />
               <input
@@ -672,7 +689,7 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-indigo-600 px-3 sm:px-4 py-2.5 text-xs sm:text-[13px] font-semibold text-white shadow-md shadow-indigo-600/30 transition hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+              <button onClick={startNewJob} className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-indigo-600 px-3 sm:px-4 py-2.5 text-xs sm:text-[13px] font-semibold text-white shadow-md shadow-indigo-600/30 transition hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
                 <Plus className="h-4 w-4 shrink-0" /> <span>New Job Card</span>
               </button>
 
@@ -741,6 +758,26 @@ export default function Dashboard() {
 
 
           </div>
+        ) : activeNav === "orders" ? (
+          openJob ? (
+            <JobCardDetails
+              key={openJob.id}
+              ui={ui}
+              order={openJob}
+              catalog={catalog}
+              onUpdate={updateOrder}
+              onAddCatalogPart={(p) => setCatalog((c) => [...c, p])}
+              onBack={() => setOpenJobId(null)}
+              onEdit={() => setJobForm({ mode: "edit", order: openJob })}
+              onPrint={() => printBill(openJob.id)}
+            />
+          ) : (
+            <ServiceOrders ui={ui} orders={orders} query={query} onOpen={showJob} />
+          )
+        ) : activeNav === "bills" ? (
+          <Bills ui={ui} orders={orders} query={query} selectedId={billId} onSelect={setBillId} onOpenJob={showJob} />
+        ) : activeNav === "reports" ? (
+          <Reports ui={ui} orders={orders} onOpenJob={showJob} />
         ) : (
           <>
             {/* STATS */}
@@ -1118,8 +1155,10 @@ export default function Dashboard() {
                   {query ? `${filtered.length} result${filtered.length === 1 ? "" : "s"} for “${query}”` : "Live status of workshop job cards"}
                 </p>
               </div>
-              {query && (
+              {query ? (
                 <button onClick={() => setQuery("")} className="text-xs font-bold text-indigo-600 hover:text-indigo-500">Clear search</button>
+              ) : (
+                <button onClick={() => navigate("orders")} className="text-xs font-bold text-indigo-600 hover:text-indigo-500">View all</button>
               )}
             </div>
 
@@ -1133,7 +1172,7 @@ export default function Dashboard() {
               <table className="w-full min-w-[600px] border-collapse text-left text-xs">
                 <thead>
                   <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${tk.muted} ${tk.line}`}>
-                    {["Vehicle", "Customer", "Repair", "Mechanic", "Status", "Delivery"].map((h) => (
+                    {["Vehicle", "Customer", "Mechanic", "Status", "Delivery"].map((h) => (
                       <th key={h} scope="col" className="whitespace-nowrap px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -1144,34 +1183,31 @@ export default function Dashboard() {
                       <tr
                         key={o.id}
                         tabIndex={0}
-                        onClick={() => setSelected(o)}
-                        onKeyDown={(e) => { if (e.key === "Enter") setSelected(o); }}
+                        onClick={() => showJob(o.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter") showJob(o.id); }}
                         className={`cursor-pointer transition-colors focus:outline-none focus-visible:bg-indigo-500/10 ${tk.hover}`}
                       >
                         <td className="whitespace-nowrap px-4 py-3">
                           <p className={`font-bold ${tk.text}`}>{o.vehicleNo}</p>
-                          <p className={`text-[10px] ${tk.muted}`}>{o.type}</p>
+                          <p className={`text-[10px] ${tk.muted}`}>{o.vehicleModel} · {o.type}</p>
                         </td>
-                        <td className={`whitespace-nowrap px-4 py-3 font-semibold ${tk.sub}`}>{o.customer}</td>
-                        <td className={`whitespace-nowrap px-4 py-3 font-medium ${tk.sub}`}>{o.repairType}</td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <p className={`font-semibold ${tk.sub}`}>{o.customer}</p>
+                          <p className={`text-[10px] ${tk.muted}`}>{o.phone}</p>
+                        </td>
                         <td className={`whitespace-nowrap px-4 py-3 font-medium ${tk.sub}`}>
                           <span className="inline-flex items-center gap-2">
                             <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ${dark ? "bg-white/10" : "bg-slate-900/[0.07]"}`}>{o.mechanic[0]}</span>
                             {o.mechanic}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${statusBadge(o.status)}`}>
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: STATUS_STYLE[o.status]?.dot ?? "#64748B" }} />
-                            {o.status}
-                          </span>
-                        </td>
+                        <td className="whitespace-nowrap px-4 py-3"><StatusPill ui={ui} status={o.status} /></td>
                         <td className={`whitespace-nowrap px-4 py-3 font-medium tabular-nums ${tk.muted}`}>{o.deliveryDate}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className={`px-4 py-10 text-center font-medium ${tk.muted}`}>No matching service orders found</td>
+                      <td colSpan={5} className={`px-4 py-10 text-center font-medium ${tk.muted}`}>No matching service orders found</td>
                     </tr>
                   )}
                 </tbody>
@@ -1210,91 +1246,15 @@ export default function Dashboard() {
     )}
   </div>
 
-      {/* ------------------------------ NEW JOB MODAL ----------------------------- */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="new-job-title" onClick={() => setShowModal(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h3 id="new-job-title" className="text-lg font-bold text-slate-900">New Job Card</h3>
-                <p className="text-xs text-slate-500">Register a vehicle and assign a mechanic</p>
-              </div>
-              <button onClick={() => setShowModal(false)} aria-label="Close" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X className="h-5 w-5" /></button>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Registration No</label>
-                <input required autoFocus placeholder="TN 58 AB 1234" value={form.vehicleNo} onChange={(e) => setForm({ ...form, vehicleNo: e.target.value.toUpperCase() })} className={modalField} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Vehicle Type</label>
-                  <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={modalField}>
-                    {["Lorry", "Bus", "Trailer", "Tipper"].map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Mechanic</label>
-                  <select value={form.mechanic} onChange={(e) => setForm({ ...form, mechanic: e.target.value })} className={modalField}>
-                    {["Ravi", "Kumar", "Arun", "Mani", "Selvam"].map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Customer / Transport Company</label>
-                <input required placeholder="SR Transport" value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} className={modalField} />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Repair / Service Type</label>
-                <input required placeholder="Engine overhaul, brake service…" value={form.repairType} onChange={(e) => setForm({ ...form, repairType: e.target.value })} className={modalField} />
-              </div>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
-                <button type="submit" className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 hover:bg-indigo-500">Create Job Card</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------ DETAIL DRAWER ----------------------------- */}
-      {selected && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Job card details" onClick={() => setSelected(null)}>
-          <div className="flex h-full w-full max-w-md flex-col justify-between bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div>
-              <div className="mb-5 flex items-start justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">Job Card</span>
-                  <h3 className="text-2xl font-bold tabular-nums text-slate-900">{selected.id}</h3>
-                </div>
-                <button onClick={() => setSelected(null)} aria-label="Close" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X className="h-5 w-5" /></button>
-              </div>
-
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${STATUS_STYLE[selected.status]?.light ?? "bg-slate-100 text-slate-700 ring-slate-300"}`}>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: STATUS_STYLE[selected.status]?.dot ?? "#64748B" }} />
-                {selected.status}
-              </span>
-
-              <dl className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm">
-                {[
-                  ["Vehicle", selected.vehicleNo],
-                  ["Category", selected.type],
-                  ["Customer", selected.customer],
-                  ["Repair task", selected.repairType],
-                  ["Mechanic", selected.mechanic],
-                  ["Est. delivery", selected.deliveryDate],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex items-center justify-between px-4 py-3">
-                    <dt className="text-slate-500">{k}</dt>
-                    <dd className="font-semibold text-slate-900">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-            <button onClick={() => setSelected(null)} className="w-full rounded-xl bg-slate-900 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">Close</button>
-          </div>
-        </div>
+      {/* --------------------------- JOB CARD FORM MODAL --------------------------- */}
+      {jobForm && (
+        <JobCardForm
+          key={`${jobForm.mode}-${jobForm.order.id}`}
+          mode={jobForm.mode}
+          initial={jobForm.order}
+          onSave={saveJob}
+          onClose={() => setJobForm(null)}
+        />
       )}
 
       {/* --------------------------- BOTTOM NAV (MOBILE) --------------------------- */}
@@ -1311,19 +1271,13 @@ export default function Dashboard() {
         aria-label="Mobile Navigation Bar"
       >
         <div className="mx-auto grid w-full max-w-lg grid-cols-5 items-center justify-items-center">
-          {[
-            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-            { id: "orders", label: "Services", icon: FileText, badge: "24" },
-            { id: "vehicles", label: "Vehicles", icon: Truck, badge: "18" },
-            { id: "reports", label: "Reports", icon: BarChart3 },
-            { id: "settings", label: "Settings", icon: Settings },
-          ].map((item) => {
+          {NAV.map((item) => ({ ...item, label: item.short ?? item.label })).map((item) => {
             const Icon = item.icon;
             const active = activeNav === item.id;
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveNav(item.id)}
+                onClick={() => navigate(item.id)}
                 className={`relative flex w-full flex-col items-center justify-center rounded-xl py-1 px-1 text-center transition-all ${
                   active
                     ? "text-indigo-600 dark:text-indigo-400 font-bold"

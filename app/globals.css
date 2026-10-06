@@ -56,3 +56,40 @@ body {
   background: rgba(148, 163, 184, 0.7);
 }
 
+
+/* Print only the invoice when a bill is printed */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html, body {
+    height: 100vh !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #invoice-print,
+  #invoice-print * {
+    visibility: visible;
+  }
+
+  #invoice-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
